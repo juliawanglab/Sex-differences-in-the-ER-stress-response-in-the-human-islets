@@ -199,27 +199,61 @@ rownames(pseudotime) = pseudotime$colnames.beta_sce.
 pseudotime.sub <- pseudotime[colnames(beta.sub),]
 beta.sub$pseudotime <- pseudotime.sub$beta_sce.slingPseudotime_1
 
+# Extracting INS transcript info
+INS_UMI <- FetchData(beta.sub, vars="INS",layer = "counts")
+INS_data <- FetchData(beta.sub,vars="INS",layer="data")
+INS <- cbind(INS_UMI,INS_data)
+colnames(INS) = c("INS","norm.INS")
+beta.sub[["INS"]] = INS$INS
+beta.sub[["norm.INS"]] = INS$norm.INS
 
 
 
-# plotting, the plotting method used
+# plotting
 library(RColorBrewer)
 meta.beta <- beta.sub@meta.data
+
+## QC
+meta.beta$GoT_sum <- meta.beta$uXBP1+meta.beta$sXBP1
+ggplot(meta.beta, aes(XBP1, GoT_sum)) +
+  geom_point( color =  "#1f78b4") +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    color = "firebrick",
+  ) +
+  stat_cor(aes(label = ..r.label..), color = "black", size = 4) +
+  stat_regline_equation(aes(label = ..eq.label..), color = "black", size = 4, label.y.npc = 0.9) +
+  labs(
+    x = "XBP1 expression",
+    y = "GoT total counts"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+
+
+## Plotting regression
 scales <- brewer.pal(7,"Accent")[1:2]
 
 ggplot(meta.beta, aes(x = pseudotime, y = norm.uXBP1, color=sex)) +
- # geom_point() +
   geom_smooth() +
   scale_color_manual(values=scales)+
   ylim(0, 2) +
   theme_classic() 
 
 ggplot(meta.beta, aes(x = pseudotime, y = norm.sXBP1, color=sex)) +
-  #geom_point() +
   geom_smooth() +
   scale_color_manual(values=scales)+
   ylim(0, 2) +
   theme_classic()
 
-
+ggplot(meta.beta, aes(x = norm.sXBP1, y = norm.INS, color=sex)) +
+  geom_smooth() +
+  scale_color_manual(values=scales)+
+  theme_classic() 
 
