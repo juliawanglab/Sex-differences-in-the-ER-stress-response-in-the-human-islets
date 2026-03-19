@@ -103,7 +103,7 @@ write.table(SAMN39523303_48h_1,"XBP1_GoT/SAMN39523303_48h.csv",quote=F,sep=",")
 
 
 # exporting metadata from the scRNA-seq data
-
+library(Seurat)
 ERstress.integrated <- readRDS("ERstress.integrated.rds")
 meta.data <- ERstress.integrated@meta.data
 
@@ -211,6 +211,8 @@ beta.sub[["norm.INS"]] = INS$norm.INS
 
 # plotting
 library(RColorBrewer)
+library(ggplot2)
+library(ggpubr)
 meta.beta <- beta.sub@meta.data
 
 ## QC
