@@ -77,7 +77,6 @@ meta.data.beta$sex = factor(meta.data.beta$sex)
 meta.data.beta$slingPseudotime_1 = as.numeric(meta.data.beta$slingPseudotime_1)
 my_comparisons <- list(c('0h_Tg','12h_Tg'),c('0h_Tg','48h_Tg'),c('12h_Tg','48h_Tg'))
 
-pdf('test.pdf',height=7,width=3)
 ggplot(meta.data.beta, aes(x=condition,y=slingPseudotime_1,fill=condition)) +     
   geom_boxplot(outlier.shape=NA) + 
   scale_y_continuous(limits=c(0,15))+
@@ -85,7 +84,6 @@ ggplot(meta.data.beta, aes(x=condition,y=slingPseudotime_1,fill=condition)) +
   theme(text = element_text(size=20)) + 
   theme(legend.position = "none") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_line(colour = "black"))
-dev.off()
 
 
 # Differential progression between different sexes
@@ -173,7 +171,6 @@ conditionGenes <- conditionGenes[!is.na(conditionGenes)]
 genelist= c("TMED2","ATF6","HERPUD1","PTPN1","NFE2L2","XBP1","DNAJC10","ATF4","DDIT3","HSPA5",
             "ERN1","CREBZF","EIF2S1","RPAP2","QRICH1","EIF2AK3","MBTPS2","PARP16","ATF6B","MBTPS1","VAPB")
 scales <- brewer.pal(7,"Accent")[1:2]
-pdf("beta_selected_genes_UPR.pdf")
 for (i in genelist)
 {
   gene = i
@@ -183,7 +180,6 @@ for (i in genelist)
           scale_color_manual(values=scales)+
           ggtitle(gene))
 }
-dev.off()
 
 # visualization of the dynamics of UPR genes of females and males with heatmap
 yhatSmooth <- 
