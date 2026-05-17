@@ -237,6 +237,20 @@ ggplot(meta.beta, aes(XBP1, GoT_sum)) +
     plot.margin = margin(10, 10, 10, 10)
   )
 
+## boxplot
+scales <- brewer.pal(7,"Accent")[1:2]
+ggplot(meta.beta, aes(x = condition, y = norm.sXBP1, fill=sex,color=sex)) +
+  geom_boxplot(
+    outlier.shape = NA,
+    width = 0.8,
+    alpha = 0.75) +
+  scale_fill_manual(values = scales)+
+  scale_color_manual(values=scales)+
+  theme_classic() +
+  theme(
+    axis.title=element_text(face="bold",size=20),
+    axis.text=element_text(face="bold",size=20)
+  )
 
 
 ## Plotting regression
