@@ -273,3 +273,31 @@ ggplot(meta.beta, aes(x = norm.sXBP1, y = norm.INS, color=sex)) +
   scale_color_manual(values=scales)+
   theme_classic() 
 
+## Statistical test whether high sXBP1 is associated with decline in INS level
+library(lme4)
+library(lmerTest)
+library(emmeans)
+
+dat.high <- meta.beta %>%
+  group_by(sex) %>%
+  mutate(
+    sXBP1_median = median(norm.sXBP1, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  filter(norm.sXBP1 >= sXBP1_median) %>%
+  mutate(
+    norm.sXBP1.scaled = scale(norm.sXBP1)[, 1]
+  )
+
+fit.high <- lmer(
+  norm.INS ~ sex * norm.sXBP1.scaled + (1 | donor),
+  data = dat.high
+)
+
+emtrends(fit.high, ~ sex, var = "norm.sXBP1.scaled")
+
+summary(
+  emtrends(fit.high, ~ sex, var = "norm.sXBP1.scaled"),
+  infer = c(TRUE, TRUE)
+)
+
