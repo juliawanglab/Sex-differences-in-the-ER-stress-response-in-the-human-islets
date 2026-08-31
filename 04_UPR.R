@@ -113,3 +113,68 @@ pheatmap(temp,
          color = colorRampPalette(c("grey", "white", "firebrick"))(100)
 )
 
+
+# Analysis of HPAP data
+## raw data was downloaded from PanKBase
+PanKBase <- readRDS("PanKBase/060425_scRNA_v3.3.rds")
+Idents(PanKBase) <- PanKBase$Cell_Type
+Endo <- subset(PanKBase, idents=c("Alpha","Beta","Delta"))
+Endo <- AddModuleScore(object= Endo, 
+                       features=features,
+                       name='UPR')
+names(Endo@meta.data)[grep("UPR", names(Endo@meta.data))] <- names(features)
+Endo_noTreatment <- subset(Endo, subset=treatments=="no_treatment")
+Endo_noTreatment$INS <- FetchData(Endo_noTreatment, vars="INS",layer="data")
+Endo_noTreatment$XBP1 <- FetchData(Endo_noTreatment, vars="XBP1",layer="data")
+Idents(Endo_noTreatment) = Endo_noTreatment$description_of_diabetes_status
+Endo_clean <- subset(Endo_noTreatment,idents=c("non-diabetic","type 2 diabetes"))
+
+metaEndo <- Endo_clean@meta.data
+metaBeta <- metaEndo[metaEndo$Cell_Type=="Beta",]
+metaBeta_HPAP <- metaBeta[metaBeta$source =="HPAP",]
+
+## plotting
+sex_cols <- c(
+  "female" = "#7FC97F",
+  "male"   = "#BEAED4"
+)
+p <- ggplot(
+  metaBeta_HPAP,
+  aes(x = `IRE1_pathway`, y = INS, color = sex, fill = sex)
+) +
+  facet_wrap(~source) +
+  geom_smooth(
+    aes(group=sex),
+    se = TRUE,
+    linewidth = 3,
+    fill="grey60",
+    alpha = 0.4
+  ) +
+  scale_color_manual(
+    values = sex_cols,
+    labels = c("Female", "Male"),
+    name = NULL
+  ) +
+  scale_fill_manual(
+    values = sex_cols,
+    labels = c("Female", "Male"),
+    name = NULL
+  ) + 
+  labs(
+    x = "IRE1 pathway activity",
+    y = "INS expression"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.title = element_text(size = 27,face="bold"),
+    axis.text = element_text(size = 27, color = "black"),
+    axis.line = element_line(linewidth = 0.6, color = "black"),
+    axis.ticks = element_line(linewidth = 0.6, color = "black"),
+    legend.position = "top",
+    legend.justification = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    plot.margin = margin(6, 6, 6, 6)
+  )
+
+p
