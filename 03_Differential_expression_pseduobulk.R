@@ -1,448 +1,397 @@
 library(Seurat)
-# differential expression analysis with pseudobulk approach
-ERstress.integrated
-## within each sex
-## beta
-beta = subset(ERstress.integrated,idents="beta")
-Idents(beta)=beta$sex
-pseudo_beta <- AggregateExpression(beta, assays = "RNA", return.seurat = T, group.by = c("sex","condition",  "donor"))
-pseudo_beta$sex.condition <- paste(pseudo_beta$sex, pseudo_beta$condition, sep = "_")
-Idents(pseudo_beta) <- "sex.condition"
-
-beta.bulk.de.female.12h.0h <- FindMarkers(object = pseudo_beta, 
-                                          ident.1 = "female_12h-Tg",
-                                          ident.2 = "female_0h-Tg", 
-                                          logfc.threshold=0,
-                                          min.pct=0,
-                                          test.use = "DESeq2")
-beta.bulk.de.female.12h.0h$p_val_adj <- p.adjust(beta.bulk.de.female.12h.0h$p_val, method='fdr')
-beta.bulk.de.female.12h.0h <- na.omit(beta.bulk.de.female.12h.0h)
-
-beta.bulk.de.female.48h.0h <- FindMarkers(object = pseudo_beta, 
-                                          ident.1 = "female_48h-Tg",
-                                          ident.2 = "female_0h-Tg", 
-                                          logfc.threshold=0,
-                                          min.pct=0,
-                                          test.use = "DESeq2",
-                                          min.cells.group=2)
-beta.bulk.de.female.48h.0h$p_val_adj <- p.adjust(beta.bulk.de.female.48h.0h$p_val, method='fdr')
-beta.bulk.de.female.48h.0h <- na.omit(beta.bulk.de.female.48h.0h)
-
-beta.bulk.de.female.48h.12h <- FindMarkers(object = pseudo_beta, 
-                                           ident.1 = "female_48h-Tg",
-                                           ident.2 = "female_12h-Tg", 
-                                           logfc.threshold=0,
-                                           min.pct=0,
-                                           test.use = "DESeq2",
-                                           min.cells.group=2)
-beta.bulk.de.female.48h.12h$p_val_adj <- p.adjust(beta.bulk.de.female.48h.12h$p_val, method='fdr')
-beta.bulk.de.female.48h.12h <- na.omit(beta.bulk.de.female.48h.12h)
-
-beta.bulk.de.male.12h.0h <- FindMarkers(object = pseudo_beta, 
-                                        ident.1 = "male_12h-Tg",
-                                        ident.2 = "male_0h-Tg", 
-                                        logfc.threshold=0,
-                                        min.pct=0,
-                                        test.use = "DESeq2")
-beta.bulk.de.male.12h.0h$p_val_adj <- p.adjust(beta.bulk.de.male.12h.0h$p_val, method='fdr')
-beta.bulk.de.male.12h.0h <- na.omit(beta.bulk.de.male.12h.0h)
-
-beta.bulk.de.male.48h.0h <- FindMarkers(object = pseudo_beta, 
-                                        ident.1 = "male_48h-Tg",
-                                        ident.2 = "male_0h-Tg", 
-                                        logfc.threshold=0,
-                                        min.pct=0,
-                                        test.use = "DESeq2",
-                                        min.cells.group=2)
-beta.bulk.de.male.48h.0h$p_val_adj <- p.adjust(beta.bulk.de.male.48h.0h$p_val, method='fdr')
-beta.bulk.de.male.48h.0h <- na.omit(beta.bulk.de.male.48h.0h)
-
-beta.bulk.de.male.48h.12h <- FindMarkers(object = pseudo_beta, 
-                                         ident.1 = "male_48h-Tg",
-                                         ident.2 = "male_12h-Tg", 
-                                         logfc.threshold=0,
-                                         min.pct=0,
-                                         test.use = "DESeq2",
-                                         min.cells.group=2)
-beta.bulk.de.male.48h.12h$p_val_adj <- p.adjust(beta.bulk.de.male.48h.12h$p_val, method='fdr')
-beta.bulk.de.male.48h.12h <- na.omit(beta.bulk.de.male.48h.12h)
-
-write.table(beta.bulk.de.female.12h.0h,"beta.bulk.de.female.12h.0h.csv")
-write.table(beta.bulk.de.female.48h.0h,"beta.bulk.de.female.48h.0h.csv")
-write.table(beta.bulk.de.female.48h.12h,"beta.bulk.de.female.48h.12h.csv")
-write.table(beta.bulk.de.male.12h.0h,"beta.bulk.de.male.12h.0h.csv")
-write.table(beta.bulk.de.male.48h.0h,"beta.bulk.de.male.48h.0h.csv")
-write.table(beta.bulk.de.male.48h.12h,"beta.bulk.de.male.48h.12h.csv")
-
-
-
-# GSEA
-
+library(SeuratObject)
+library(DESeq2)
 library(fgsea)
 library(data.table)
 library(ggplot2)
 library(msigdbr)
+library(plyr)
+library(dplyr)
 
-hallmarks <- gmtPathways("h.all.v2025.1.Hs.symbols.gmt")
-beta.bulk.de.female.12h.0h$rank <- sign(beta.bulk.de.female.12h.0h$avg_log2FC) * (-log10(beta.bulk.de.female.12h.0h$p_val))
+# differential expression analysis with pseudobulk approach followed by GSEA
 
-rl1 <- beta.bulk.de.female.12h.0h$rank
-names(rl1) <- rownames(beta.bulk.de.female.12h.0h)
-
-fgseaRes <- fgsea(
-  pathways = hallmarks,
-  stats = rl1,
-  minSize = 15,
-  maxSize = 5000,
-  eps = 0.0
-)
-fwrite(fgseaRes, file="beta.bulk.de.female.12h.0h.GSEA.txt", sep="\t", sep2=c("", " ", ""))
-
-
-sigPathways <- fgseaRes[padj < 0.05][order(pval), pathway]
-
-plotGseaTable(hallmarks[sigPathways], rl1, fgseaRes, 
-              gseaParam=0.5)
-
-
-## Select the union of significant terms (FDR < 0.05).
-female.12h.pathways <- read.table("beta.bulk.de.female.12h.0h.GSEA.txt",header=T,sep="\t") 
-female.12h.pathways <- na.omit(female.12h.pathways)
-female.12h.pathways.terms <- female.12h.pathways[(female.12h.pathways$padj < 0.05),]$pathway
-
-female.48h.pathways <- read.table("beta.bulk.de.female.48h.0h.GSEA.txt",header=T,sep="\t") 
-female.48h.pathways <- na.omit(female.48h.pathways)
-female.48h.pathways.terms <- female.48h.pathways[(female.48h.pathways$padj < 0.05),]$pathway
-
-male.12h.pathways <- read.table("beta.bulk.de.male.12h.0h.GSEA.txt",header=T,sep="\t") 
-male.12h.pathways <- na.omit(male.12h.pathways)
-male.12h.pathways.terms <- male.12h.pathways[(male.12h.pathways$padj < 0.05),]$pathway
-
-male.48h.pathways <- read.table("beta.bulk.de.male.48h.0h.GSEA.txt",header=T,sep="\t") 
-male.48h.pathways <- na.omit(male.48h.pathways)
-male.48h.pathways.terms <- male.48h.pathways[(male.48h.pathways$padj < 0.05),]$pathway
-
-de.terms = Reduce(union,list(female.12h.pathways.terms,female.48h.pathways.terms,male.12h.pathways.terms,male.48h.pathways.terms))
-female.12h.pathways.1 <- female.12h.pathways[female.12h.pathways$pathway%in%de.terms,]
-female.12h.pathways.1 <- female.12h.pathways.1[,c("pathway","padj")]
-female.48h.pathways.1 <- female.48h.pathways[female.48h.pathways$pathway%in%de.terms,]
-female.48h.pathways.1 <- female.48h.pathways.1[,c("pathway","padj")]
-male.12h.pathways.1 <- male.12h.pathways[male.12h.pathways$pathway%in%de.terms,]
-male.12h.pathways.1 <- male.12h.pathways.1[,c("pathway","padj")]
-male.48h.pathways.1 <- male.48h.pathways[male.48h.pathways$pathway%in%de.terms,]
-male.48h.pathways.1 <- male.48h.pathways.1[,c("pathway","padj")]
-
-combined.pathways <- merge(female.12h.pathways.1,male.12h.pathways.1,by="pathway",all=TRUE)
-combined.pathways <- merge(combined.pathways,female.48h.pathways.1,by="pathway",all=TRUE)
-combined.pathways <- merge(combined.pathways,male.48h.pathways.1,by="pathway",all=TRUE)
-rownames(combined.pathways) = combined.pathways$pathway
-combined.pathways = combined.pathways[,-1]
-colnames(combined.pathways) =c("female.12h","male.12h","female.48h","male.48h")
-# recoding NA to 1
-combined.pathways[is.na(combined.pathways)] <- 1
-combined.pathways.1 <- -log10(combined.pathways)
-#pheatmap(combined.pathways.1, 
-#         clustering_method="ward.D2",
-#         cluster_cols = FALSE
-#         )
-combined.pathways.1 <- combined.pathways.1[,c(1,3,2,4)]
-library(gplots)
-heatmap.2(data.matrix(combined.pathways.1), 
-          dendrogram = "none",
-          trace="none",
-          density.info="none",
-          scale="none", 
-          col=colorRampPalette(c("white","red"))(n=10), 
-          breaks=c(0,1,2,3,4,5,6,7,8,9,10),
-          key=TRUE,
-          cexCol = 1, cexRow=1, 
-          Rowv=NULL, 
-          Colv=NULL,
-          sepwidth=c(0.02,0.02),
-          sepcolor="black",
-          colsep=0:ncol(combined.pathways.1),
-          rowsep=0:nrow(combined.pathways.1))
-
-
-## the same scripts used for other cell types for pathway analysis and visualization
-
-## combining alpha, beta and delta cells 
-## top 5 most significant pathways in alpha, beta, and delta cells based on p.adjust < 0.05 and select union of all pathways, creating corresponding dataframe
-
-get_top_pathways <- function(
-    celltypes  = c("beta", "alpha", "delta"),
-    sexes      = c("female", "male"),
-    contrasts  = c("12h.0h", "48h.0h"),
-    dir        = ".",                    # directory containing files
-    outfile    = "top5_pathways_summary.csv",
-    top_n      = 5
-) {
-  build_filename <- function(cell, sex, contrast) {
-    sprintf("%s/%s.bulk.de.%s.%s.GSEA.txt", dir, cell, sex, contrast)
-  }
-  
-  combos <- expand.grid(cell = celltypes, sex = sexes, contrast = contrasts, stringsAsFactors = FALSE)
-  
-  results_list <- list()   # top 5 per combo
-  full_list    <- list()   # FULL pathway+padj+NES per combo (deduplicated)
-  summary_rows <- list()   # long-format top-5 summary
-  
-  for (i in seq_len(nrow(combos))) {
-    cell     <- combos$cell[i]
-    sex      <- combos$sex[i]
-    contrast <- combos$contrast[i]
-    fname    <- build_filename(cell, sex, contrast)
-    key_name <- paste(cell, sex, contrast, sep = ".")
-    
-    # Read table safely
-    df <- tryCatch(
-      read.table(fname, header = TRUE, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) {
-        warning(sprintf("Failed to read %s: %s (skipping)", fname, e$message))
-        return(NULL)
-      }
-    )
-    if (is.null(df)) next
-    
-    
-    # Ensure padj is numeric, then keep only needed cols and drop NAs
-    if (!is.numeric(df$padj)) {
-      suppressWarnings(df$padj <- as.numeric(df$padj))
-    }
-    df <- na.omit(df[, c("pathway", "padj", "NES")])
-    if (nrow(df) == 0) next
-    
-    # Deduplicate same pathway per file using min(padj) (change FUN if needed)
-    df <- df[order(df$pathway, df$padj, na.last = NA), ]
-    df_all <- df[!duplicated(df$pathway), c("pathway", "padj", "NES")]
-    full_list[[key_name]] <- df_all
-    
-    # Order for top N
-    ord_idx <- order(df_all$padj, na.last = NA)
-    df_ord  <- df_all[ord_idx, , drop = FALSE]
-    top_df  <- head(df_ord[, c("pathway", "padj","NES")], top_n)
-    results_list[[key_name]] <- top_df
-    
-    # Add to summary rows (long format)
-    if (nrow(top_df) > 0) {
-      summary_rows[[length(summary_rows) + 1]] <- data.frame(
-        celltype = cell,
-        sex      = sex,
-        contrast = contrast,
-        rank     = seq_len(nrow(top_df)),   # <-- rows, not columns
-        pathway  = top_df$pathway,
-        padj     = top_df$padj,
-        NES		 = top_df$NES,
-        stringsAsFactors = FALSE
-      )
-    } else {
-      summary_rows[[length(summary_rows) + 1]] <- data.frame(
-        celltype = cell,
-        sex      = sex,
-        contrast = contrast,
-        rank     = integer(0),
-        pathway  = character(0),
-        padj     = numeric(0),
-        NES		 = numeric(0),
-        stringsAsFactors = FALSE
-      )
-    }
-  }
-  
-  # Bind and write summary
-  if (length(summary_rows) > 0) {
-    summary_df <- do.call(rbind, summary_rows)
-    write.csv(summary_df, file = outfile, row.names = FALSE)
-  } else {
-    summary_df <- data.frame(
-      celltype = character(0), sex = character(0), contrast = character(0),
-      rank = integer(0), pathway = character(0), padj = numeric(0), NES = numberic(0),
-      stringsAsFactors = FALSE
-    )
-  }
-  
-  return(list(
-    top_list  = results_list,
-    full_list = full_list,
-    summary   = summary_df
-  ))
-}
-
-
-
-
-# Helper: construct a wide NES matrix for any set of pathway names
-NES_matrix_from_full <- function(full_list, pathways = NULL, fill = NA_real_) {
-  if (is.null(pathways)) {
-    pathways <- unique(unlist(lapply(full_list, function(df) df$pathway)))
-  }
-  combo_names <- names(full_list)
-  
-  mat <- matrix(fill, nrow = length(pathways), ncol = length(combo_names),
-                dimnames = list(pathways, combo_names))
-  
-  for (j in seq_along(combo_names)) {
-    df <- full_list[[j]]
-    if (is.null(df) || nrow(df) == 0) next
-    if (!all(c("pathway", "NES") %in% names(df))) next
-    
-    m <- match(df2$pathway, pathways)
-    keep <- !is.na(m)
-    mat[m[keep], j] <- df2$NES[keep]
-  }
-  
-  mat
-}
-
-
-padj_matrix_from_full <- function(full_list, pathways = NULL, agg_fun = min, fill = NA_real_) { 
-  if (is.null(pathways)) { 
-    pathways <- unique(unlist(lapply(full_list, function(df) df$pathway))) 
-  }
-  combo_names <- names(full_list)
-  
-  mat <- matrix(fill, nrow = length(pathways), ncol = length(combo_names),
-                dimnames = list(pathways, combo_names))
-  
-  for (j in seq_along(combo_names)) {
-    df <- full_list[[j]]
-    if (is.null(df) || nrow(df) == 0) next
-    if (!all(c("pathway", "padj") %in% names(df))) next
-    
-    m <- match(df2$pathway, pathways)
-    keep <- !is.na(m)
-    mat[m[keep], j] <- df2$NES[keep]
-  }
-  
-  mat
-}
-
-res <- get_top_pathways(
-  celltypes = c("beta", "alpha", "delta"),
-  sexes     = c("female", "male"),
-  contrasts = c("12h.0h", "48h.0h"),
-  dir       = "/gpfs/research/jwanggroup/jwang_group/scRNA-seq/ERstress/integration",
-  outfile   = "top5_pathways_summary.csv",
-  top_n     = 5
-)
-
-# Your union of top pathways (can also be any list you define)
-combined.pathways <- unique(res$summary$pathway)
-
-# Build the wide padj and NES matrix across ALL combos using FULL tables
-padj_mat <- padj_matrix_from_full(res$full_list, pathways = combined.pathways)
-NES_mat <- NES_matrix_from_full(res$full_list, pathways = combined.pathways)
-
-# Save
-write.csv(NES_mat, "NES_mat_combined_pathways.csv")
-
-# Plot combined heatmap
-combined.pathways <- NES_mat
-
-
-rownames(combined.pathways) = sub("^.*?\\_", "", rownames(combined.pathways))
-combined.pathways = combined.pathways[,c("alpha.female.12h.0h","alpha.female.48h.0h","alpha.male.12h.0h","alpha.male.48h.0h",
-                                         "beta.female.12h.0h","beta.female.48h.0h","beta.male.12h.0h","beta.male.48h.0h",
-                                         "delta.female.12h.0h","delta.female.48h.0h","delta.male.12h.0h","delta.male.48h.0h")]
-my_colour = list(
-  sex = c(female = "#7FC97F", male = "#BEAED4"),
-  condition=c(Tg_12h="#A6CEE3",Tg_48h="#1F78B4"),
-  celltype=c(alpha="#88BDFF", beta="#FF8000",delta="#FFFA0A"))
-
-my_sample_col <- data.frame(sex = rep(c("female","female","male","male"),3),condition=rep(c("Tg_12h","Tg_48h"),6),
-                            celltype=c(rep("alpha",4),rep("beta",4),rep("delta",4)))
-
-rownames(my_sample_col)=colnames(combined.pathways)
-
-# recoding NA to 0
-combined.pathways[is.na(combined.pathways)] <- 0
-#combined.pathways.1 <- -log10(combined.pathways)
-
-
-# Define colors and breaks
-color_palette <- c(colorRampPalette(c("blue","white"))(5),colorRampPalette(c("white","red"))(5))
-breaks <- seq(-3, 3, length.out = 11)
-
-library(pheatmap)
-# Create heatmap
-pheatmap(
-  combined.pathways,  
-  annotation_col = my_sample_col,
-  annotation_colors=my_colour,
-  cluster_rows = TRUE,   # Disable row clustering (reordered manually)
-  cluster_cols = FALSE,  # Disable column clustering
-  clustering_method = "ward.D2",
-  color = color_palette,
-  breaks = breaks,
-  border_color = "black",  # Add separators
-  cellwidth = 15,          # Adjust column width
-  cellheight = 15,         # Adjust row height
-  fontsize_row = 10,       # Adjust row font size
-  fontsize_col = 10,       # Adjust column font size
-  legend = TRUE,           # Show color key
-  legend_breaks = breaks,  # Ensure legend matches breaks
-  legend_labels = breaks,  # Label each break
-  annotation_names_row = TRUE,  # Show row annotations
-  annotation_names_col = TRUE   # Show column annotations
-)
-
-
-# adding blank space between celltypes
-
-# Add blank columns between groups
-combined.pathways.1_with_space <- combined.pathways
-group_indices <- c(4, 8)  # Indices where groups end (modify as needed)
-
-for (idx in rev(group_indices)) {
-  blank_col <- matrix(NA, nrow = nrow(combined.pathways.1_with_space), ncol = 1)
-  combined.pathways.1_with_space <- cbind(
-    combined.pathways.1_with_space[, 1:idx],
-    blank_col,
-    combined.pathways.1_with_space[, (idx + 1):ncol(combined.pathways.1_with_space)]
+## preparing pathways
+## retrieve gene sets
+cell_sets <- msigdbr(
+  species = "Homo sapiens",
+  collection = "C8"
+) %>%
+  dplyr::filter(grepl(
+    "^(VANGURP_PANCREATIC_|MURARO_PANCREAS_)", gs_name
+  )) %>%
+  dplyr::transmute(
+    gs_name, gene_symbol,
+    Collection = "Islet cell type"
   )
-}
 
-# Update annotations to match the new matrix
-my_sample_col_with_space <- my_sample_col
-for (idx in rev(group_indices)) {
-  blank_row <- data.frame(sex = NA, condition = NA, celltype = NA)
-  rownames(blank_row) <- paste0("Spacer", idx)  # Assign unique rownames for spacers
-  my_sample_col_with_space <- rbind(
-    my_sample_col_with_space[1:idx, ],
-    blank_row,
-    my_sample_col_with_space[(idx + 1):nrow(my_sample_col_with_space), ]
-  )
-}
-
-
-# Custom border colors: NA for added spaces, black for the rest
-custom_border_colors <- matrix("black", nrow = nrow(combined.pathways.1_with_space), 
-                               ncol = ncol(combined.pathways.1_with_space))
-blank_cols <- which(apply(is.na(combined.pathways.1_with_space), 2, all))
-custom_border_colors[, blank_cols] <- NA
-
-# Create heatmap
-pheatmap(
-  combined.pathways.1_with_space,  
-  annotation_col = my_sample_col_with_space,
-  annotation_colors = my_colour,
-  cluster_rows = TRUE,   # Enable row clustering
-  cluster_cols = FALSE,  # Disable column clustering
-  #  clustering_method = "ward.D2",
-  color = color_palette,
-  breaks = breaks,
-  border_color = custom_border_colors,  # Custom grid line colors
-  cellwidth = 15,           # Adjust column width
-  cellheight = 15,          # Adjust row height
-  fontsize_row = 10,        # Adjust row font size
-  fontsize_col = 10,        # Adjust column font size
-  legend = TRUE,            # Show color key
-  legend_breaks = breaks,   # Ensure legend matches breaks
-  legend_labels = breaks,   # Label each break
-  annotation_names_row = TRUE,  # Show row annotations
-  annotation_names_col = TRUE   # Show column annotations
+pathway_names <- c(
+  "GOBP_INTEGRATED_STRESS_RESPONSE_SIGNALING",
+  "GOBP_PERK_MEDIATED_UNFOLDED_PROTEIN_RESPONSE",
+  "GOBP_IRE1_MEDIATED_UNFOLDED_PROTEIN_RESPONSE",
+  "GOBP_ATF6_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"
 )
 
+UPR_pathways <- msigdbr(
+  species = "Homo sapiens",
+  collection = "C5",
+  subcollection = "GO:BP"
+) %>%
+  dplyr::filter(gs_name %in% pathway_names) %>%
+  dplyr::transmute(
+    gs_name, gene_symbol,
+    Collection = "GO UPR/ISR"
+  )
+
+reactome_ids <- c(
+  "R-HSA-381070",   # IRE1alpha activates chaperones (XBP1s targets)    50 genes
+  "R-HSA-381042",   # PERK regulates gene expression                     32 genes
+  "R-HSA-380994",   # ATF4 activates genes in response to ER stress      27 genes
+  "R-HSA-381033"   # ATF6 (ATF6-alpha) activates chaperones             12 genes
+)
+
+reactome_UPR <- msigdbr(
+  species = "Homo sapiens",
+  collection = "C2",
+  subcollection = "CP:REACTOME"
+) %>%
+  dplyr::filter(gs_exact_source %in% reactome_ids)
+
+reactome_UPR <- reactome_UPR %>%
+  dplyr::transmute(
+    gs_name, gene_symbol,
+    Collection = "Reactome UPR"
+  )
 
 
+msig_h <- msigdbr(
+  species = "Homo sapiens",
+  collection = "H"
+) %>%
+  dplyr::transmute(
+    gs_name, gene_symbol,
+    Collection = "Hallmark"
+  )
+
+pathway_sets <- dplyr::bind_rows(
+  cell_sets, UPR_pathways, reactome_UPR, msig_h
+) %>%
+  dplyr::distinct()
+
+# List for fgsea
+pathways <- split(
+  pathway_sets$gene_symbol,
+  pathway_sets$gs_name
+)
+pathways <- lapply(pathways, unique)
+
+
+## differential expression analysis
+## =============================================================================
+## Pseudobulk DE and GSEA in every cell type: within-sex time responses, then the sex difference
+##   One DESeq2 model per cell type:  ~ sex + sex:donor_n + sex:condition
+##     (donor nested in sex; every sample is compared with its own donor's 0 h)
+##   Within sex:  female / male, 12 h and 48 h vs 0 h
+##   Sex contrast: male response - female response (sex x time interaction)
+## =============================================================================
+
+ERstress.integrated <- readRDS("ERstress.integrated.rds")
+pseudo_bulk <- AggregateExpression(ERstress.integrated, assays = "RNA", return.seurat = T, 
+                                   group.by = c("cell.type.final","sex","condition",  "donor"))
+
+skip      <- c("doublets", "epsilon")     # doublets; epsilon pseudobulks too small (median 0.06 M reads)
+out_dir   <- "DEG/results"; dir.create(out_dir, showWarnings = FALSE)
+pb  <- pseudo_bulk
+cnt <- LayerData(pb, assay = "RNA", layer = "counts")
+md  <- pb[[]]
+gs  <- pathways
+cell_types <- setdiff(sort(unique(md$cell.type.final)), skip)
+args <- commandArgs(trailingOnly = TRUE); if (length(args)) cell_types <- strsplit(args[1], ",")[[1]]   # optional: run a subset
+
+contrasts <- function(dds) {
+  out <- list()
+  for (tm in c("12h", "48h")) { tp <- paste0(tm, ".Tg")
+  out[[paste0("female_", tm)]] <- results(dds, name = paste0("sexfemale.condition", tp))
+  out[[paste0("male_", tm)]]   <- results(dds, name = paste0("sexmale.condition", tp))
+  out[[paste0("sex_x_", tm)]]  <- results(dds, contrast = list(paste0("sexmale.condition", tp), paste0("sexfemale.condition", tp)))
+  }
+  out
+}
+
+de_all <- list(); gsea_all <- list(); summ <- list()
+for (ct in cell_types) {
+  t0 <- Sys.time()
+  s <- md$cell.type.final == ct
+  m <- droplevels(md[s, ])
+  m$sex       <- factor(m$sex, levels = c("female", "male"))
+  m$condition <- factor(m$condition, levels = c("0h-Tg", "12h-Tg", "48h-Tg"))
+  m$donor_n   <- factor(ave(as.integer(factor(m$donor)), m$sex, FUN = function(v) as.integer(factor(v))))
+  dds <- DESeqDataSetFromMatrix(round(as.matrix(cnt[, s])), m, design = ~ sex + sex:donor_n + sex:condition)
+  dds <- dds[rowSums(counts(dds) >= 10) >= 1, ]
+  dds <- suppressMessages(DESeq(dds, quiet = TRUE))
+  for (k in names(cs <- contrasts(dds))) {
+    r <- cs[[k]]
+    de_all[[paste(ct, k)]] <- data.frame(celltype = ct, contrast = k, gene = rownames(r), log2FC = r$log2FoldChange,
+                                         lfcSE = r$lfcSE, stat = r$stat, pvalue = r$pvalue, padj = r$padj)
+    st <- sort(setNames(r$stat, rownames(r))[is.finite(r$stat)], decreasing = TRUE)
+    set.seed(42)
+    f <- suppressWarnings(fgsea(gs, st, minSize = 5, maxSize = 2000))
+    f$leadingEdge <- vapply(f$leadingEdge, paste, "", collapse = ",")
+    gsea_all[[paste(ct, k)]] <- data.frame(celltype = ct, contrast = k, f)
+    summ[[paste(ct, k)]] <- data.frame(celltype = ct, contrast = k, genes = nrow(r), DE_FDR0.05 = sum(r$padj < 0.05, na.rm = TRUE),
+                                       up = sum(r$padj < 0.05 & r$log2FoldChange > 0, na.rm = TRUE),
+                                       down = sum(r$padj < 0.05 & r$log2FoldChange < 0, na.rm = TRUE),
+                                       pct_p0.05 = round(100 * mean(r$pvalue < 0.05, na.rm = TRUE), 1))
+  }
+  saveRDS(list(de = de_all[grepl(paste0("^", ct, " "), names(de_all))], gsea = gsea_all[grepl(paste0("^", ct, " "), names(gsea_all))],
+               summ = summ[grepl(paste0("^", ct, " "), names(summ))]), file.path(out_dir, paste0("ct_", ct, ".rds")))
+  message(sprintf("%-12s %d genes, %.1f min", ct, nrow(dds), as.numeric(difftime(Sys.time(), t0, units = "mins"))))
+}
+## combine every cell type finished so far
+parts <- lapply(list.files(out_dir, "^ct_.*\\.rds$", full.names = TRUE), readRDS)
+write.csv(do.call(rbind, unlist(lapply(parts, `[[`, "de"), recursive = FALSE)),   file.path(out_dir, "DE_all_celltypes.csv"), row.names = FALSE)
+write.csv(do.call(rbind, unlist(lapply(parts, `[[`, "gsea"), recursive = FALSE)), file.path(out_dir, "GSEA_all_celltypes.csv"), row.names = FALSE)
+write.csv(do.call(rbind, unlist(lapply(parts, `[[`, "summ"), recursive = FALSE)), file.path(out_dir, "DE_summary.csv"), row.names = FALSE)
+
+
+
+
+## =============================================================================
+## GSEA heatmaps, all gene sets, all cell types
+##   Fig A  within-sex response (each sex and timepoint vs its own 0 h)        red = induced, blue = repressed
+##   Fig B  sex contrast (male - female response), bulk islets as reference      purple = male > female, green = female > male
+##   tile colour = NES; * = FDR below the cut-off; grey = not tested
+##   rows = every gene set (top_n = Inf) or the top_n gene sets of each analysis (lowest FDR), grouped by theme
+##          (Hallmark, islet cell types, GO UPR, Reactome UPR)
+## Input: GSEA_all_celltypes.csv from the DESeq2 + fgsea loop
+## Requires: ggplot2, patchwork
+## =============================================================================
+library(ggplot2)
+library(patchwork)
+
+## ---- settings ----------------------------------------------------------------------------
+top_n      <- 5                                  # top gene sets per analysis; Inf = all gene sets
+upr_always <- TRUE                               # sex contrast: always show the UPR sets (GO and Reactome)
+gsea_file  <- "DEG/results/GSEA_all_celltypes.csv"
+bulk_file  <- "fgsea_sex_all_times.csv"          # bulk sex x time GSEA; set to NA to leave bulk out
+out_dir    <- "DEG/figures"
+fdr_within <- 0.05                               # * in the within-sex heatmap
+fdr_sex    <- 0.1                                # * in the sex-contrast heatmap
+nes_cap    <- 2.5                                # colour scale saturates at +/- this NES
+row_h      <- 0.14                               # inches per gene set
+cell_order <- c("alpha", "beta", "delta", "PP", "acinar", "ductal", "endothelial", "fibroblast", "immune")
+ct_cols    <- c(bulk = "#525252", alpha = "#88BDFF", beta = "#FF8000", delta = "#FFFA0A", PP = "#A65628", acinar = "#F781BF",
+                ductal = "#E41A1C", endothelial = "#4DAF4A", fibroblast = "#984EA3", immune = "#BDBDBD")
+ann_cols   <- list(condition = c(Tg_12h = "#A6CEE3", Tg_48h = "#1F78B4"), sex = c(female = "#7FC97F", male = "#BEAED4"))
+## heatmap colours: the same hues as the dot plots, darker so the tiles are readable
+col_up <- "#B2182B"; col_down <- "#2166AC"            # within-sex
+col_male <- "#BEAED4"; col_female <- "#7FC97F"        # sex contrast (dot plot)
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+## ---- data ------------------------------------------------------------------------------------
+g <- read.csv(gsea_file)
+g$time <- sub(".*_", "", g$contrast)                                  # "12h" / "48h"
+g$sex  <- ifelse(grepl("^sex_x", g$contrast), NA, sub("_.*", "", g$contrast))
+
+## ---- readable names ----------------------------------------------------------------------------
+pretty_name <- function(p) {
+  src <- ifelse(grepl("^MURARO_", p), " (Muraro)", ifelse(grepl("^VANGURP_", p), " (van Gurp)",
+                                                          ifelse(grepl("^GOBP_", p), " (GO)", ifelse(grepl("^REACTOME_", p), " (Reactome)", ""))))
+  s <- sub("^(HALLMARK|GOBP|REACTOME|MURARO_PANCREAS|VANGURP_PANCREATIC)_", "", p)
+  s <- sub("^IRE1ALPHA_ACTIVATES_CHAPERONES$", "IRE1a_activates_chaperones", s)
+  s <- sub("^ATF4_ACTIVATES_GENES_IN_RESPONSE_TO_ENDOPLASMIC_RETICULUM_STRESS$", "ATF4_activates_ER-stress_genes", s)
+  s <- sub("^ATF6_ATF6_ALPHA_", "ATF6_", s)
+  s <- sub("^UNFOLDED_PROTEIN_RESPONSE_UPR$", "UNFOLDED_PROTEIN_RESPONSE", s)
+  s <- tolower(gsub("_", " ", s)); s <- paste0(toupper(substring(s, 1, 1)), substring(s, 2))
+  fix <- c(mtorc1 = "mTORC1", tnfa = "TNF-alpha", nfkb = "NF-kB", myc = "MYC", v1 = "V1", v2 = "V2", ire1 = "IRE1",
+           perk = "PERK", atf6 = "ATF6", e2f = "E2F", g2m = "G2M", il6 = "IL-6", jak = "JAK", stat3 = "STAT3", il2 = "IL-2",
+           stat5 = "STAT5", kras = "KRAS", uv = "UV", dna = "DNA", tgf = "TGF", pi3k = "PI3K", akt = "AKT", mtor = "mTOR",
+           ire1a = "IRE1a", atf4 = "ATF4", creb3 = "CREB3", `er-stress` = "ER-stress")
+  for (f in names(fix)) s <- gsub(paste0("\\b", f, "\\b"), fix[[f]], s, ignore.case = TRUE)
+  s <- sub(" mediated unfolded protein response", "-mediated UPR", s)
+  s <- sub("Pancreatic polypeptide cell", "PP cell", s)
+  s <- sub("IL-6 JAK STAT3", "IL-6/JAK/STAT3", s); s <- sub("IL-2 STAT5", "IL-2/STAT5", s); s <- sub("PI3K AKT mTOR", "PI3K/AKT/mTOR", s)
+  s <- sub(" dn$", " down", s); s <- sub("Epithelial mesenchymal", "Epithelial-mesenchymal", s); s <- sub("Wnt beta catenin", "Wnt/beta-catenin", s)
+  s <- sub("TGF beta", "TGF-beta", s)
+  paste0(s, src)
+}
+
+## ---- themes (checked from top to bottom) and row order -------------------------------------------
+theme_rules <- c(
+  "ER stress"               = "UNFOLDED_PROTEIN|INTEGRATED_STRESS|PROTEIN_SECRETION|IRE1|PERK|ATF4_ACTIVATES|ATF6|CREB3",
+  "Inflammation"            = "TNFA|INTERFERON|IL6|IL2|INFLAMMATORY|COMPLEMENT|ALLOGRAFT",
+  "Growth signaling"        = "MTORC1|MYC_TARGETS|PI3K",
+  "Cell cycle"              = "E2F|G2M|MITOTIC",
+  "Cell stress & death"     = "P53|APOPTOSIS|HYPOXIA|UV_RESPONSE|REACTIVE_OXYGEN|DNA_REPAIR",
+  "Metabolism"              = "OXIDATIVE|GLYCOLYSIS|FATTY_ACID|CHOLESTEROL|HEME|ADIPOGENESIS|BILE_ACID|XENOBIOTIC|PEROXISOME",
+  "Endocrine cell identity" = "ALPHA_CELL|BETA_CELL|DELTA_CELL|POLYPEPTIDE|EPSILON|GAMMA_CELL",
+  "Exocrine cell identity"  = "ACINAR|DUCTAL",
+  "Endothelial & ECM"       = "ENDOTHELIAL|STROMAL|TGF_BETA|MESENCHYMAL_TRANSITION|ANGIOGENESIS|APICAL_JUNCTION|COAGULATION")
+## ER-stress rows in UPR-branch order: whole UPR, IRE1, PERK / ISR, ATF6, other
+er_order <- c("Unfolded protein response", "Unfolded protein response (Reactome)", "Cellular response to unfolded protein (GO)",
+              "IRE1a activates chaperones (Reactome)", "IRE1-mediated UPR (GO)",
+              "PERK regulates gene expression (Reactome)", "ATF4 activates ER-stress genes (Reactome)",
+              "PERK-mediated UPR (GO)", "Integrated stress response signaling (GO)",
+              "ATF6 activates chaperones (Reactome)", "ATF6 activates chaperone genes (Reactome)", "ATF6-mediated UPR (GO)",
+              "CREB3 factors activate genes (Reactome)", "Protein secretion")
+## Endocrine cell-identity rows by cell type: alpha, beta, delta, epsilon, PP (gamma = PP cells)
+celltype_order <- c("Alpha cell (Muraro)", "Alpha cell (van Gurp)",
+                    "Beta cell (Muraro)", "Beta cell (van Gurp)", "Pancreas beta cells",
+                    "Delta cell (Muraro)", "Delta cell (van Gurp)",
+                    "Epsilon cell (Muraro)",
+                    "PP cell (Muraro)", "Gamma cell (van Gurp)")
+## themes whose rows follow a fixed order (all other themes: by mean NES)
+fixed_orders <- list("ER stress" = er_order, "Endocrine cell identity" = celltype_order)
+
+prepare_rows <- function(d, order_by) {
+  d$theme <- "Other pathways"
+  for (t in rev(names(theme_rules))) d$theme[grepl(theme_rules[[t]], d$pathway)] <- t
+  d$theme <- factor(d$theme, c(names(theme_rules), "Other pathways"))
+  d$label <- pretty_name(d$pathway)
+  ro <- aggregate(NES ~ label + theme, d[order_by & !is.na(d$NES), ], mean)       # by theme, then mean NES
+  ro <- ro[order(ro$theme, -ro$NES), ]
+  for (th in names(fixed_orders)) {                                      # fixed order where defined; rows not listed go last
+    i  <- which(ro$theme == th); if (!length(i)) next
+    rk <- match(ro$label[i], fixed_orders[[th]]); rk[is.na(rk)] <- 99 + seq_along(rk[is.na(rk)])
+    ro[i, ] <- ro[i, ][order(rk), ]
+  }
+  d$label <- factor(d$label, rev(ro$label)); d$theme <- droplevels(d$theme)
+  d
+}
+
+## top gene sets: the top_n of each analysis by FDR (ties broken alphabetically), pooled across analyses
+top_sets <- function(d, n) {
+  d <- d[!is.na(d$padj), ]; d <- d[order(d$padj, d$pathway), ]
+  unique(unlist(lapply(split(d$pathway, paste(d$celltype, d$contrast)), head, n)))
+}
+suffix   <- if (is.finite(top_n)) paste0("top", top_n) else "all_sets"
+
+## ---- heatmap with annotation bars ---------------------------------------------------------------
+heatmap_figure <- function(d, cols, ann_vars, low, high, low_lab, high_lab, fdr_cut, title, subtitle, file, width) {
+  x_lim <- range(cols$x) + c(-0.5, 0.5)
+  bar <- function(var, order) {
+    vals <- if (var == "celltype") ct_cols[levels(cols$celltype)] else ann_cols[[var]]
+    ggplot(cols, aes(x, var, fill = .data[[var]])) +
+      geom_tile(width = 1, height = 1, colour = "white", linewidth = 0.3) +
+      scale_fill_manual(values = vals, name = var, guide = guide_legend(order = order, nrow = 1, title.position = "left")) +
+      scale_x_continuous(limits = x_lim, expand = c(0, 0)) + scale_y_discrete(position = "right", expand = c(0, 0)) +
+      theme_void(base_size = 10) +
+      theme(axis.text.y.right = element_text(face = "bold", size = 7.5, hjust = 0, margin = margin(l = 3)), plot.margin = margin(0, 4, 1, 4))
+  }
+  d$star <- ifelse(!is.na(d$padj) & d$padj < fdr_cut, "*", "")
+  d$star_col <- ifelse(!is.na(d$NES) & abs(d$NES) > 0.45 * nes_cap, "white", "black")      # white on dark tiles
+  hm <- ggplot(d, aes(x, label)) +
+    geom_tile(aes(fill = pmax(pmin(NES, nes_cap), -nes_cap)), width = 1, height = 1, colour = "white", linewidth = 0.25) +
+    geom_text(aes(label = star, colour = star_col), size = 2.6, vjust = 0.75) + scale_colour_identity() +
+    facet_grid(theme ~ ., scales = "free_y", space = "free_y", labeller = labeller(theme = label_wrap_gen(14))) +
+    scale_x_continuous(limits = x_lim, expand = c(0, 0)) + scale_y_discrete(expand = c(0, 0)) +
+    scale_fill_gradient2(low = low, mid = "white", high = high, limits = c(-nes_cap, nes_cap), na.value = "grey85",
+                         breaks = c(-nes_cap, 0, nes_cap), labels = c(low_lab, "0", high_lab), name = "NES",
+                         guide = guide_colourbar(order = 4, direction = "horizontal", barwidth = unit(5, "cm"), barheight = unit(0.3, "cm"),
+                                                 title.position = "left", title.vjust = 1)) +
+    labs(x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(panel.grid = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(),
+          axis.text.y = element_text(size = 6.8), panel.border = element_rect(colour = "grey40", linewidth = 0.3),
+          strip.text.y = element_text(angle = 0, hjust = 0, face = "bold", size = 7.2), strip.background = element_rect(fill = "grey92"),
+          panel.spacing.y = unit(0.2, "lines"), plot.margin = margin(0, 4, 6, 4))
+  bars <- lapply(seq_along(ann_vars), function(i) bar(ann_vars[i], i))
+  fig <- wrap_plots(c(bars, list(hm)), ncol = 1) +
+    plot_layout(heights = c(rep(0.15, length(bars)), row_h * nlevels(d$label) + 0.05 * nlevels(d$theme)), guides = "collect") +
+    plot_annotation(title = title, subtitle = subtitle,
+                    theme = theme(plot.title = element_text(face = "bold", size = 11), plot.subtitle = element_text(size = 7.6))) &
+    theme(legend.position = "bottom", legend.box = "vertical", legend.box.just = "left", legend.justification = "left",
+          legend.key.size = unit(0.3, "cm"), legend.text = element_text(size = 7.3), legend.title = element_text(size = 7.8, face = "bold"),
+          legend.spacing.y = unit(0.02, "cm"))
+  h <- 2.6 + row_h * nlevels(d$label) + 0.05 * nlevels(d$theme) + 0.15 * length(bars)
+  ggsave(file.path(out_dir, paste0(file, ".pdf")), fig, width = width, height = h, device = if (capabilities("cairo")) cairo_pdf else "pdf")
+  ggsave(file.path(out_dir, paste0(file, ".png")), fig, width = width, height = h, dpi = 300, bg = "white")
+}
+
+
+
+
+
+## ---- dot plot with annotation bars (used for Fig B) ------------------------------------------------
+dot_figure <- function(d, cols, ann_vars, low, high, low_lab, high_lab, fdr_cut, title, subtitle, file, width, row_h = 0.2) {
+  x_lim <- range(cols$x) + c(-0.55, 0.55)
+  bar <- function(var, order) {
+    vals <- if (var == "celltype") ct_cols[levels(cols$celltype)] else ann_cols[[var]]
+    ggplot(cols, aes(x, var, fill = .data[[var]])) + geom_tile(width = 1, height = 1, colour = "white", linewidth = 0.4) +
+      scale_fill_manual(values = vals, name = var, guide = guide_legend(order = order, nrow = 1, title.position = "left")) +
+      scale_x_continuous(limits = x_lim, expand = c(0, 0)) + scale_y_discrete(position = "right", expand = c(0, 0)) + theme_void(base_size = 10) +
+      theme(axis.text.y.right = element_text(face = "bold", size = 7.5, hjust = 0, margin = margin(l = 3)), plot.margin = margin(0, 4, 1, 4))
+  }
+  d <- d[!is.na(d$NES), ]                                              # gene sets without a result get no dot
+  d$sig <- !is.na(d$padj) & d$padj < fdr_cut
+  dots <- ggplot(d, aes(x, label)) +
+    geom_point(aes(size = pmin(-log10(padj), 6), fill = pmax(pmin(NES, nes_cap), -nes_cap), colour = sig), shape = 21, stroke = 0.5) +
+    facet_grid(theme ~ ., scales = "free_y", space = "free_y", labeller = labeller(theme = label_wrap_gen(14))) +
+    scale_x_continuous(breaks = cols$x, labels = NULL, limits = x_lim, expand = c(0, 0)) +
+    scale_fill_gradient2(low = low, mid = "white", high = high, limits = c(-nes_cap, nes_cap), breaks = c(-nes_cap, 0, nes_cap),
+                         labels = c(low_lab, "0", high_lab), name = "NES",
+                         guide = guide_colourbar(order = 4, direction = "horizontal", barwidth = unit(4.5, "cm"), barheight = unit(0.3, "cm"),
+                                                 title.position = "left", title.vjust = 1)) +
+    scale_size_continuous(range = c(0.4, 3.3), limits = c(0, 6), breaks = c(1, 2, 4, 6), labels = c("1", "2", "4", ">=6"),
+                          name = expression(-log[10]~FDR), guide = guide_legend(order = 5, nrow = 1, title.position = "left")) +
+    scale_colour_manual(values = c(`TRUE` = "black", `FALSE` = "grey75"), breaks = c("TRUE", "FALSE"), labels = c(paste("FDR <", fdr_cut), "n.s."),
+                        name = NULL, guide = guide_legend(order = 6, nrow = 1, override.aes = list(size = 3, fill = "white"))) +
+    labs(x = NULL, y = NULL) + theme_bw(base_size = 10) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_line(colour = "grey93"), axis.ticks.x = element_blank(),
+          strip.text.y = element_text(angle = 0, hjust = 0, face = "bold", size = 7.2), strip.background = element_rect(fill = "grey92"),
+          axis.text.y = element_text(size = 7.4), panel.spacing.y = unit(0.25, "lines"), plot.margin = margin(0, 4, 6, 4))
+  bars <- lapply(seq_along(ann_vars), function(i) bar(ann_vars[i], i))
+  fig <- wrap_plots(c(bars, list(dots)), ncol = 1) +
+    plot_layout(heights = c(rep(0.16, length(bars)), row_h * nlevels(d$label) + 0.06 * nlevels(d$theme)), guides = "collect") +
+    plot_annotation(title = title, subtitle = subtitle,
+                    theme = theme(plot.title = element_text(face = "bold", size = 11), plot.subtitle = element_text(size = 7.6))) &
+    theme(legend.position = "bottom", legend.box = "vertical", legend.box.just = "left", legend.justification = "left",
+          legend.key.size = unit(0.3, "cm"), legend.text = element_text(size = 7.3), legend.title = element_text(size = 7.8, face = "bold"),
+          legend.spacing.y = unit(0.02, "cm"))
+  h <- 3.6 + row_h * nlevels(d$label) + 0.06 * nlevels(d$theme) + 0.16 * length(bars)
+  ggsave(file.path(out_dir, paste0(file, ".pdf")), fig, width = width, height = h, device = if (capabilities("cairo")) cairo_pdf else "pdf")
+  ggsave(file.path(out_dir, paste0(file, ".png")), fig, width = width, height = h, dpi = 300, bg = "white")
+}
+
+
+
+## ---------------------------------------------------------------------------
+## Fig A. Within-sex response
+## ---------------------------------------------------------------------------
+a <- g[!grepl("^sex_x", g$contrast) & g$celltype %in% cell_order, ]
+if (is.finite(top_n)) a <- a[a$pathway %in% top_sets(a, top_n), ]
+a <- prepare_rows(a, rep(TRUE, nrow(a)))
+gap_sex <- 0.3; gap_cell <- 0.9                         # narrow gap between sexes, wide gap between cell types
+a$x <- (match(a$celltype, cell_order) - 1) * (4 + gap_sex + gap_cell) + (a$sex == "male") * (2 + gap_sex) + (a$time == "48h") + 1
+ca <- unique(a[, c("celltype", "sex", "time", "x")]); ca$celltype <- factor(ca$celltype, cell_order); ca$condition <- paste0("Tg_", ca$time)
+heatmap_figure(a, ca, c("celltype", "condition", "sex"), col_down, col_up, "repressed", "induced", fdr_within,
+               paste0("Thapsigargin response within each sex: ", if (is.finite(top_n)) sprintf("top %d gene sets", top_n) else "all gene sets", ", all islet cell types"),
+               sprintf("%sNES from fgsea of each sex and timepoint vs its own 0 h (DESeq2 per cell type, donor nested in sex; Wald statistic). * FDR < %s; grey = not tested.\nFemale 48 h: one donor was not sampled at this timepoint.",
+                       if (is.finite(top_n)) sprintf("Rows: the top %d gene sets of each analysis (lowest FDR), %d in total. ", top_n, nlevels(a$label)) else "", fdr_within),
+               paste0("heatmap_within_sex_", suffix), width = 11)
+
+## ---------------------------------------------------------------------------
+## Fig B. Sex contrast (male - female response)
+## ---------------------------------------------------------------------------
+
+b <- g[grepl("^sex_x", g$contrast) & g$celltype %in% cell_order, ]
+if (is.finite(top_n)) {
+  keep <- top_sets(b, top_n)
+  if (upr_always) keep <- unique(c(keep, b$pathway[grepl("^(GOBP|REACTOME)_|^HALLMARK_UNFOLDED_PROTEIN", b$pathway)]))
+  b <- b[b$pathway %in% keep, ]
+}
+b <- b[, c("celltype", "time", "pathway", "NES", "padj")]
+groups <- cell_order
+
+b <- prepare_rows(b, b$celltype != "bulk")
+gap <- 0.8
+b$x <- (match(b$celltype, groups) - 1) * (2 + gap) + (b$time == "48h") + 1
+cb <- unique(b[, c("celltype", "time", "x")]); cb$celltype <- factor(cb$celltype, groups); cb$condition <- paste0("Tg_", cb$time)
+dot_figure(b, cb, c("celltype", "condition"), col_female, col_male, "female > male", "male > female", fdr_sex,
+           paste0("Sex differences in the thapsigargin response: ", if (is.finite(top_n)) sprintf("top %d gene sets", top_n) else "all gene sets", ", all islet cell types"),
+           paste0("fgsea of the sex x time interaction (male - female change from each donor's 0 h); DESeq2 per cell type, donor nested in sex.\n",
+                  if (is.finite(top_n)) sprintf("Rows: the top %d gene sets of each cell type and timepoint%s, %d in total. ", top_n,
+                                                if (upr_always) ", plus all UPR sets (ordered by UPR branch)" else "", nlevels(b$label)) else "",
+                  sprintf("Black outline = FDR < %s.", fdr_sex),
+                  if ("bulk" %in% groups) "\nBulk islets shown for reference; gene sets not tested in bulk (Reactome UPR sets, GO parent term) have no bulk dots." else ""),
+           paste0("dotplot_sex_contrast_", suffix), width = 9.2)
 
